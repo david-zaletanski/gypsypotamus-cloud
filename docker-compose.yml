@@ -1,0 +1,188 @@
+# ############################################################################
+# gypsypotamus.com
+# droppingalog.com
+# docker-compose.yml
+# The main docker-compose file, responsible for host operation and deployment.
+#
+version: "3.7"
+services:
+#
+# ############################################################################
+# ############################## RVRS PROXY ##################################
+# ############################################################################
+#
+#
+####
+# nginx
+# nginx-proxy
+#
+# Docker Hub:   https://hub.docker.com/r/jwilder/nginx-proxy/
+# GitHub:       https://github.com/jwilder/nginx-proxy
+#
+  nginx-proxy:
+    image: "jwilder/nginx-proxy"
+    labels:
+      - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy=true"
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - "DEFAULT_HOST=gypsypotamus.com"
+      - "TZ=America/Chicago"
+    volumes:
+      - "/opt/nginx/htpasswd:/etc/nginx/htpasswd"
+      - "/opt/nginx/config:/etc/nginx/conf.d"
+      - "/opt/nginx/vhost.d:/etc/nginx/vhost.d"
+      - "/opt/nginx/html:/usr/share/nginx/html"
+      - "/opt/nginx/certs:/etc/nginx/certs:ro"
+      - "/var/run/docker.sock:/tmp/docker.sock:ro"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+####
+# nginx-letsencrypt
+# letsencrypt-nginx-proxy-companion
+#
+# GitHub:   https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion
+#
+  nginx-letsencrypt:
+    image: "jrcs/letsencrypt-nginx-proxy-companion:latest"
+    depends_on:
+      - nginx-proxy
+    container_name: nginx-letsencrypt
+    restart: always
+    environment:
+      - "DEBUG=true"
+      - "NGINX_PROXY_CONTAINER=nginx-proxy"
+      - "TZ=America/Chicago"
+    volumes:
+      - "/opt/nginx/config:/etc/nginx/conf.d"
+      - "/opt/nginx/vhost.d:/etc/nginx/vhost.d:rw"
+      - "/opt/nginx/html:/usr/share/nginx/html:rw"
+      - "/opt/nginx/certs:/etc/nginx/certs:rw"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "2m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+# ############################################################################
+# ############################## OPERATIONS ##################################
+# ############################################################################
+#
+####
+# cadvisor
+# cAdvisor Container Monitoring Solution
+#
+# Docker Hub:       https://hub.docker.com/r/google/cadvisor/
+#
+  cadvisor:
+    image: "google/cadvisor:latest"
+    depends_on:
+      - nginx-proxy
+    container_name: cadvisor
+    restart: always
+    ports:
+      - "1001:8080"
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+      - "/dev/disk/:/dev/disk:ro"
+      - "/opt/cadvisor/chief.htpasswd:/chief.htpasswd"
+    command: ["./cadvisor","--http_auth_file","chief.htpasswd","--http_auth_realm","localhost"]
+    environment:
+      - "VIRTUAL_HOST=cadvisor.gypsypotamus.com"
+      - "VIRTUAL_PORT=1001"
+      - "LETSENCRYPT_HOST=cadvisor.gypsypotamus.com"
+      - "LETSENCRYPT_EMAIL=david.zaletanski@gmail.com"
+      - "TZ=America/Chicago"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "4m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+####
+# node-exporter
+# Host Metrics Collection
+#
+# DockerHub:  https://hub.docker.com/r/prom/node-exporter
+# GitHub:     https://www.github.com/prometheus/node_exporter
+#
+  node-exporter:
+    image: prom/node-exporter
+    depends_on:
+      - nginx-proxy
+    container_name: node-exporter
+    restart: always
+    ports:
+      - "9100:9100"
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.ignored-mount-points"
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    environment:
+      - "VIRTUAL_HOST=nodeexport.gypsypotamus.com"
+      - "VIRTUAL_PORT=9100"
+      - "LETSENCRYPT_HOST=nodeexport.gypsypotamus.com"
+      - "LETSENCRYPT_EMAIL=david.zaletanski@gmail.com"
+      - "TZ=America/Chicago"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "4m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+####
+# Watchtower
+# Keeps Docker Images Up To Date
+#
+# DockerHub:  https://hub.docker.com/r/v2tec/watchtower/
+#
+  watchtower:
+    image: "v2tec/watchtower:latest"
+    container_name: watchtower
+    depends_on:
+      - nginx-proxy
+    restart: always
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "TZ=America/Chicago"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+#
+# ############################################################################
+# ############################## NETWORKING ##################################
+# ############################################################################
+#
+networks:
+  default:
+    name: frontend
+  frontend:

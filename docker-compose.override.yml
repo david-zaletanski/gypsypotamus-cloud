@@ -1,0 +1,76 @@
+# ############################################################################
+# gypsypotamus.com
+# docker-compose.override.yml
+# The docker-compose file containing actual public services, not admin tools.
+#
+version: "3.7"
+services:
+#
+#
+####
+# Wordpress
+# gypsypotamus.com Website
+#
+# DockerHub:  https://hub.docker.com/_/wordpress
+# GitHub:
+#
+  wordpress:
+    image: wordpress:latest
+    depends_on:
+      - nginx-proxy
+      - wordpress-db
+    container_name: wordpress
+    restart: always
+    ports:
+      - "8000:80"
+    volumes:
+      - "/opt/wordpress/html:/var/www/html"
+    environment:
+      - "VIRTUAL_HOST=gypsypotamus.com,www.gypsypotamus.com"
+      - "VIRTUAL_PORT=8000"
+      - "LETSENCRYPT_HOST=gypsypotamus.com,www.gypsypotamus.com"
+      - "LETSENCRYPT_EMAIL=david.zaletanski@gmail.com"
+      - "WORDPRESS_DB_HOST=wordpress-db:3306"
+      - "WORDPRESS_DB_USER=wordpressuser"
+      - "WORDPRESS_DB_PASSWORD=VN893fhf3480fnsdfiSHDFJK"
+      - "WORDPRESS_DB_NAME=wordpress"
+      - "TZ=America/Chicago"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+    networks:
+      - frontend
+#
+####
+# Wordpress MySQL Database
+# SewingForSmiles.com Website
+#
+# DockerHub:  https://hub.docker.com/_/mysql
+# GitHub:
+#
+  wordpress-db:
+    image: mysql:5.7
+    depends_on:
+      - nginx-proxy
+    container_name: wordpress-db
+    volumes:
+      - "/opt/wordpress/db:/var/lib/mysql"
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - "MYSQL_ROOT_PASSWORD=Mfgtyu10pq!#"
+      - "MYSQL_DATABASE=wordpress"
+      - "MYSQL_USER=wordpressuser"
+      - "MYSQL_PASSWORD=VN893fhf3480fnsdfiSHDFJK"
+      - "TZ=America/Chicago"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "10"
+    networks:
+      - frontend
+#
